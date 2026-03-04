@@ -30,6 +30,9 @@ secrets.json
 _ReSharper.*/
 *.DotSettings.user
 
-*.ipynb
 x64/
 x32/
+
+.venv*
+*.ipynb
+*.mp4
