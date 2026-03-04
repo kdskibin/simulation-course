@@ -29,9 +29,7 @@
 Коэффициент влияния температуры: 1.1
 Размер моделируемой области: 400*400
 
-<video width="640" height="480" controls>
-  <source src="static/example.mp4" type="video/mp4">
-</video>
+https://github.com/user-attachments/assets/878a8b9e-f716-408d-a61e-83fb56e46e51
 
 **Выводы:**
 
