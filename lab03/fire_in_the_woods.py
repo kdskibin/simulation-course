@@ -3,6 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib import colors
+import logging
+import sys
+
+# Переопределяем параметры логгирования для вывода сообщений уровня info
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
 
 def iterate(X):
     updated_X = np.zeros((NY, NX))
@@ -70,11 +79,17 @@ X[1:NY-1, 1:NX-1] = np.random.randint(0, 2, size=(NY-2, NX-2))
 X[1:NY-1, 1:NX-1] = np.random.random(size=(NY-2, NX-2)) < FOREST_FRACTION
 X[10:NY-10, NX//2-7:NX//2+7] = WATER
 
-fig = plt.figure(figsize=(25/3, 6.25))
+fig = plt.figure(figsize=(12, 8))
 ax = fig.add_subplot(111)
 ax.set_axis_off()
 im = ax.imshow(X, cmap=cmap, norm=norm)
 
+logging.info(f"Размер области {NX}*{NY}")
+if WIND_DIRECTION not in available_wind_directions:
+    logging.warning(f"""Переданное значение направления ветра: {WIND_DIRECTION} не поддерживается!
+                    Доступные значения: {available_wind_directions.keys()}
+                    Будет использовано значение по умолчанию.""")
+logging.info(f"Начинаю расчеты...")
 # Функция анимации: вызывается для создания кадра для каждого поколения
 def animate(i):
     im.set_data(animate.X)
