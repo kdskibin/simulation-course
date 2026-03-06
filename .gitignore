@@ -36,3 +36,4 @@ x32/
 .venv*
 *.ipynb
 *.mp4
+*.gif
