@@ -106,7 +106,6 @@ def run_simulation(params):
     # Внутренняя область заполняется деревьями случайно
     X[1:NY-1, 1:NX-1] = (np.random.random(size=(NY-2, NX-2)) < FOREST_FRACTION).astype(int)
     # Добавляем речку
-    X[10:NY-10, NX//2-7:NX//2+7] = WATER
 
     # Настройка цветов для визуализации
     colors_list = [(0.2, 0, 0), (0, 0.5, 0), (1, 0, 0), 'orange', 'blue']
