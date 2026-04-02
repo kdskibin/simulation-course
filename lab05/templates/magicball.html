@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Магический шар</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+        form { margin: 20px; }
+        input[type="text"] { width: 300px; padding: 8px; }
+        button { padding: 8px 16px; background: blue; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .result { margin-top: 20px; font-size: 1.2em; }
+        .error { color: red; }
+        a { display: inline-block; margin-top: 20px; color: blue; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <h1>Магический шар</h1>
+    <form method="post">
+        <input type="text" name="question" placeholder="Задайте свой вопрос" required>
+        <button type="submit">Тряхнуть шар</button>
+    </form>
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+    {% if answer %}
+        <div class="result">
+            <p><strong>Вопрос:</strong> {{ question }}</p>
+            <p><strong>Ответ шара:</strong> {{ answer }}</p>
+        </div>
+    {% endif %}
+    <a href="/">На главную</a>
+</body>
+</html>
