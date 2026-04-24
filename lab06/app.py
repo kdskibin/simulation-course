@@ -3,6 +3,7 @@ import base64
 import random
 import numpy as np
 import matplotlib
+import logging
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.stats import chi2, norm
@@ -178,11 +179,19 @@ def generate_normal_plot(normal_results, bins):
     return fig_to_base64(fig)
 
 
+def normalize(x_th, p_th):
+    if (p_sum := np.sum(p_th)) > 1:
+        logging.info(f"Сумма вероятностей больше еденицы, нормализация")
+        new_p_th = [el/p_sum for el in p_th]
+        return (x_th, new_p_th)
+    return (x_th, p_th)
+
+
 # Маршруты
 @app.route('/', methods=['GET', 'POST'])
 def index():
     # Параметры для нормальной симуляции по умолчанию
-    default_normal_n = ['100', '1000', '10000']
+    default_normal_n = ['10', '100', '1000', '10000']
     default_bins = 20
 
     if request.method == 'POST':
@@ -191,8 +200,8 @@ def index():
             preset = request.form.get('preset', 'uniform')
             if preset == 'uniform':
                 session['dist_text'] = '1,0.2;2,0.2;3,0.2;4,0.2;5,0.2'
-            elif preset == 'bernoulli':
-                session['dist_text'] = '0,0.4;1,0.6'
+            # elif preset == 'bernoulli':
+            #     session['dist_text'] = '0,0.4;1,0.6'
             else:
                 session['dist_text'] = '1,0.2;2,0.2;3,0.2;4,0.2;5,0.2'
             session['last_preset'] = preset
@@ -204,6 +213,7 @@ def index():
             session['dist_text'] = dist_text
             try:
                 x_th, p_th = parse_distribution(dist_text)
+                x_th, p_th = normalize(x_th, p_th)
             except Exception as e:
                 flash(f'Error parsing distribution: {e}')
                 return redirect(url_for('index'))
