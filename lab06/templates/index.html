@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Лаборатория моделирования</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Лаборатория моделирования: дискретные и нормальные распределения</h1>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash">
+                    {% for msg in messages %}
+                        <p>{{ msg }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Блок дискретного распределения -->
+        <div class="panel">
+            <h2>Дискретная случайная величина</h2>
+            <form method="post">
+                <div class="form-group">
+                    <label for="dist_text">Распределение (формат: x1,p1;x2,p2;...)</label>
+                    <textarea name="dist_text" id="dist_text" rows="3">{{ session.get('dist_text', '1,0.2;2,0.2;3,0.2;4,0.2;5,0.2') }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Предустановки:</label>
+                    <div class="preset-group">
+                        <select name="preset">
+                            <option value="uniform" {% if session.get('last_preset') == 'uniform' %}selected{% endif %}>Равномерное 1-5</option>
+                            <option value="bernoulli" {% if session.get('last_preset') == 'bernoulli' %}selected{% endif %}>Бернулли (0.4/0.6)</option>
+                        </select>
+                        <button type="submit" name="preset_load" value="1" class="btn btn-small">Загрузить</button>
+                    </div>
+                </div>
+
+                <button type="submit" name="run_discrete" value="1" class="btn">Запуск (N=10,100,1000,10000)</button>
+            </form>
+
+            {% if discrete_results %}
+            <div class="results">
+                <h3>Результаты дискретного моделирования</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N</th>
+                            <th>Эмп. среднее</th>
+                            <th>Эмп. стд. откл.</th>
+                            <th>Отн. ошибка среднего</th>
+                            <th>Отн. ошибка стд. откл.</th>
+                            <th>&chi;²</th>
+                            <th>Критич. &chi;²</th>
+                            <th>Тест</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in discrete_results %}
+                        <tr>
+                            <td>{{ r.N }}</td>
+                            <td>{{ "%.4f"|format(r.emp_mean) }}</td>
+                            <td>{{ "%.4f"|format(r.emp_std) }}</td>
+                            <td>{{ "%.4f"|format(r.rel_err_mean) }}</td>
+                            <td>{{ "%.4f"|format(r.rel_err_std) }}</td>
+                            <td>{{ "%.4f"|format(r.chi2) }}</td>
+                            <td>{{ "%.4f"|format(r.critical) }}</td>
+                            <td class="{{ 'pass' if r.passed else 'fail' }}">{{ 'Пройден' if r.passed else 'Не пройден' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if discrete_plot %}
+                <img src="data:image/png;base64,{{ discrete_plot }}" alt="График дискретного распределения">
+                {% endif %}
+                <!-- <p class="conclusion">
+                    С ростом N относительные ошибки среднего и стандартного отклонения уменьшаются, критерий хи-квадрат чаще принимается. При малых N критерий может быть ненадёжен из-за низких ожидаемых частот.
+                </p> -->
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Блок нормального распределения -->
+        <div class="panel">
+            <h2>Нормальная случайная величина (Бокс-Мюллер)</h2>
+            <form method="post">
+                <div class="form-group">
+                    <label for="sample_sizes">Размеры выборок:</label>
+                    <select name="sample_sizes" id="sample_sizes" multiple size="4">
+                        <option value="100" {% if '100' in selected_normal_n %}selected{% endif %}>100</option>
+                        <option value="1000" {% if '1000' in selected_normal_n %}selected{% endif %}>1 000</option>
+                        <option value="10000" {% if '10000' in selected_normal_n %}selected{% endif %}>10 000</option>
+                        <option value="100000" {% if '100000' in selected_normal_n %}selected{% endif %}>100 000</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="bins">Количество интервалов:</label>
+                    <input type="number" id="bins" name="bins" value="{{ bins|default(15) }}" min="5" max="100" step="1">
+                </div>
+                <button type="submit" name="run_normal" value="1" class="btn btn-normal">Запуск</button>
+            </form>
+
+            {% if normal_results %}
+            <div class="results">
+                <h3>Результаты нормального моделирования</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N</th>
+                            <th>Ошибка среднего</th>
+                            <th>Ошибка стд. откл.</th>
+                            <th>&chi;²</th>
+                            <th>Критич. &chi;²</th>
+                            <th>Тест</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in normal_results %}
+                        <tr>
+                            <td>{{ r.N }}</td>
+                            <td>{{ "%.6f"|format(r.mean_err) }}</td>
+                            <td>{{ "%.6f"|format(r.std_err) }}</td>
+                            <td>{{ "%.4f"|format(r.chi2) }}</td>
+                            <td>{{ "%.4f"|format(r.critical) }}</td>
+                            <td class="{{ 'pass' if r.passed else 'fail' }}">{{ 'Пройден' if r.passed else 'Не пройден' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if normal_plot %}
+                <img src="data:image/png;base64,{{ normal_plot }}" alt="График нормального распределения">
+                {% endif %}
+                <!-- <p class="conclusion">
+                    С ростом объёма выборки гистограммы сходятся к теоретической плотности, ошибки среднего и стандартного отклонения стремятся к нулю, а критерий хи-квадрат всё чаще подтверждает гипотезу о нормальности.
+                </p> -->
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
