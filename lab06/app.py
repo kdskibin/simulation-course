@@ -90,7 +90,7 @@ def run_all_discrete(x_th, p_th):
     return results
 
 
-# Генерация нормальной случайной величины (Box-Muller)
+# Генерация нормальной случайной величины при помощи преобразования Бокса-Мюллера
 def simulate_normal(N, bins):
     samples = []
     for _ in range(N // 2):
