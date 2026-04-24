@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -34,8 +35,8 @@
                     <div class="preset-group">
                         <select name="preset">
                             <option value="uniform" {% if session.get('last_preset') == 'uniform' %}selected{% endif %}>Равномерное 1-5</option>
-                            <!-- <option value="bernoulli" {% if session.get('last_preset') == 'bernoulli' %}selected{% endif %}>Бернулли (0.4/0.6)</option> -->
                         </select>
+                        <!-- Кнопка предустановки закомментирована, можно раскомментировать при желании -->
                         <!-- <button type="submit" name="preset_load" value="1" class="btn btn-small">Загрузить</button> -->
                     </div>
                 </div>
@@ -77,9 +78,6 @@
                 {% if discrete_plot %}
                 <img src="data:image/png;base64,{{ discrete_plot }}" alt="График дискретного распределения">
                 {% endif %}
-                <!-- <p class="conclusion">
-                    С ростом N относительные ошибки среднего и стандартного отклонения уменьшаются, критерий хи-квадрат чаще принимается. При малых N критерий может быть ненадёжен из-за низких ожидаемых частот.
-                </p> -->
             </div>
             {% endif %}
         </div>
@@ -89,13 +87,21 @@
             <h2>Нормальная случайная величина (Бокс-Мюллер)</h2>
             <form method="post">
                 <div class="form-group">
-                    <label for="sample_sizes">Размеры выборок:</label>
+                    <label for="sample_sizes">Размеры выборок (Ctrl+Выбор для нескольких):</label>
                     <select name="sample_sizes" id="sample_sizes" multiple size="4">
-                        <option value="10" {% if '100' in selected_normal_n %}selected{% endif %}>10</option>
-                        <option value="100" {% if '1000' in selected_normal_n %}selected{% endif %}>100</option>
-                        <option value="1000" {% if '10000' in selected_normal_n %}selected{% endif %}>1000</option>
-                        <option value="10000" {% if '100000' in selected_normal_n %}selected{% endif %}>10000</option>
+                        <option value="10" {% if '10' in selected_normal_n %}selected{% endif %}>10</option>
+                        <option value="100" {% if '100' in selected_normal_n %}selected{% endif %}>100</option>
+                        <option value="1000" {% if '1000' in selected_normal_n %}selected{% endif %}>1000</option>
+                        <option value="10000" {% if '10000' in selected_normal_n %}selected{% endif %}>10000</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label for="mu">Математическое ожидание (μ):</label>
+                    <input type="number" id="mu" name="mu" value="{{ mu|default(0) }}" step="any">
+                </div>
+                <div class="form-group">
+                    <label for="sigma">Стандартное отклонение (σ):</label>
+                    <input type="number" id="sigma" name="sigma" value="{{ sigma|default(1) }}" step="any" min="0.001">
                 </div>
                 <div class="form-group">
                     <label for="bins">Количество интервалов:</label>
@@ -111,6 +117,8 @@
                     <thead>
                         <tr>
                             <th>N</th>
+                            <th>Ср. значение (эмп.)</th>
+                            <th>Дисперсия (эмп.)</th>
                             <th>Ошибка среднего</th>
                             <th>Ошибка стд. откл.</th>
                             <th>&chi;²</th>
@@ -122,6 +130,8 @@
                         {% for r in normal_results %}
                         <tr>
                             <td>{{ r.N }}</td>
+                            <td>{{ "%.6f"|format(r.emp_mean) }}</td>
+                            <td>{{ "%.6f"|format(r.emp_var) }}</td>
                             <td>{{ "%.6f"|format(r.mean_err) }}</td>
                             <td>{{ "%.6f"|format(r.std_err) }}</td>
                             <td>{{ "%.4f"|format(r.chi2) }}</td>
@@ -134,9 +144,6 @@
                 {% if normal_plot %}
                 <img src="data:image/png;base64,{{ normal_plot }}" alt="График нормального распределения">
                 {% endif %}
-                <!-- <p class="conclusion">
-                    С ростом объёма выборки гистограммы сходятся к теоретической плотности, ошибки среднего и стандартного отклонения стремятся к нулю, а критерий хи-квадрат всё чаще подтверждает гипотезу о нормальности.
-                </p> -->
             </div>
             {% endif %}
         </div>
