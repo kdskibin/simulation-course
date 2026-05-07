@@ -39,5 +39,6 @@ x32/
 readme_writer*
 
 .vscode/
+*.csv
 
 __pycache__/
