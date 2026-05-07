@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Моделирование погоды</title>
+  <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial; max-width: 900px; margin: auto; padding: 20px; }
+    .matrix input { width: 70px; text-align: center; }
+    .current-state { font-size: 2em; margin: 20px 0; }
+    canvas { max-width: 100%; }
+    .hidden { display: none; }
+    .error { color: red; }
+    .btn { padding: 8px 16px; margin: 5px; }
+    .result-table td, .result-table th { padding: 6px 12px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Марковская модель погоды</h1>
+  <p>Состояния: 1 - Ясно, 2 - Облачно, 3 - Пасмурно.</p>
+
+  <div>
+    <h3>Матрица интенсивностей переходов</h3>
+    <table class="matrix" id="qmatrix">
+      <tr>
+        <th></th><th>1</th><th>2</th><th>3</th>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td><input type="number" step="any" id="q11" value="-0.4"></td>
+        <td><input type="number" step="any" id="q12" value="0.3"></td>
+        <td><input type="number" step="any" id="q13" value="0.1"></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><input type="number" step="any" id="q21" value="0.4"></td>
+        <td><input type="number" step="any" id="q22" value="-0.8"></td>
+        <td><input type="number" step="any" id="q23" value="0.4"></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><input type="number" step="any" id="q31" value="0.1"></td>
+        <td><input type="number" step="any" id="q32" value="0.4"></td>
+        <td><input type="number" step="any" id="q33" value="-0.5"></td>
+      </tr>
+    </table>
+    <p><em>Убедитесь, что суммы строк равны 0, внедиагональные элементы >= 0.</em></p>
+  </div>
+
+  <div>
+    <label>Количество дней моделирования: <input type="number" id="days" value="20" min="5" max="10000"></label><br/>
+    <label>Скорость: <input type="number" id="speed" value="0.2" min="0.05" max="2" step="0.05"></label>
+  </div>
+
+  <button class="btn" onclick="startSim()">Запустить моделирование</button>
+  <button class="btn" onclick="stopSim()" id="stopBtn" disabled>Остановить</button>
+
+  <div id="status" class="current-state"></div>
+  <div id="error" class="error"></div>
+
+  <div>
+    <h3>График состояния по дням</h3>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div id="results" class="hidden">
+    <h3>Среднее время пребывания (дней)</h3>
+    <table class="result-table">
+      <tr><th>Состояние</th><th>Эмпирическое</th><th>Теоретическое</th></tr>
+      <tr><td>Ясно</td><td id="mean1"></td><td id="theory-mean1"></td></tr>
+      <tr><td>Облачно</td><td id="mean2"></td><td id="theory-mean2"></td></tr>
+      <tr><td>Пасмурно</td><td id="mean3"></td><td id="theory-mean3"></td></tr>
+    </table>
+
+    <h3>Гистограмма распределений</h3>
+    <canvas id="distChart" width="400" height="300"></canvas>
+
+    <h3>Сравнение распределений</h3>
+    <table class="result-table">
+      <tr><th>Состояние</th><th>Эмпирическое (время)</th><th>Теоретическое</th></tr>
+      <tr><td>Ясно</td><td id="emp1"></td><td id="theor1"></td></tr>
+      <tr><td>Облачно</td><td id="emp2"></td><td id="theor2"></td></tr>
+      <tr><td>Пасмурно</td><td id="emp3"></td><td id="theor3"></td></tr>
+    </table>
+    <!-- <p><a id="downloadLink" href="#">Скачать лог (CSV)</a></p> -->
+  </div>
+
+  <script>
+    let socket = null;
+    let sessionId = null;
+    let chart = null;
+    let distChart = null;
+    let chartData = { days: [], states: [] };
+    let simulationActive = false;
+
+    function connect() {
+      socket = io();
+      socket.on('connect', () => {
+        document.getElementById('error').textContent = '';
+      });
+      socket.on('session_id', (data) => {
+        sessionId = data.session_id;
+      });
+      socket.on('simulation_started', (info) => {
+        document.getElementById('status').textContent =
+          `Начальное состояние: ${info.state_label} (стационарные вероятности: ${info.stationary.map(v => v.toFixed(3))})`;
+        document.getElementById('error').textContent = '';
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('results').classList.add('hidden');
+        // Сброс графика
+        chartData = { days: [], states: [] };
+        if (chart) {
+          chart.data.labels = [];
+          chart.data.datasets[0].data = [];
+          chart.update();
+        }
+        simulationActive = true;
+        if (distChart) {
+          distChart.destroy();
+          distChart = null;}
+      });
+      socket.on('new_day', (data) => {
+        chartData.days.push(data.day);
+        chartData.states.push(data.state);
+        updateChart();
+        document.getElementById('status').textContent =
+          `День ${data.day}: ${data.label}`;
+      });
+      socket.on('simulation_done', (summary) => {
+        simulationActive = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('status').textContent = 'Моделирование завершено';
+        // Показать результаты
+        const emp = summary.empirical;
+        const theor = summary.theoretical;
+        document.getElementById('emp1').textContent = emp[0].toFixed(4);
+        document.getElementById('emp2').textContent = emp[1].toFixed(4);
+        document.getElementById('emp3').textContent = emp[2].toFixed(4);
+        document.getElementById('theor1').textContent = theor[0].toFixed(4);
+        document.getElementById('theor2').textContent = theor[1].toFixed(4);
+        document.getElementById('theor3').textContent = theor[2].toFixed(4);
+        document.getElementById('results').classList.remove('hidden');
+        // Среднее время
+        const meanTimes = summary.mean_times;
+        const theoryMeanTimes = summary.theoretical_mean_times;
+        document.getElementById('mean1').textContent = meanTimes[0].toFixed(2);
+        document.getElementById('mean2').textContent = meanTimes[1].toFixed(2);
+        document.getElementById('mean3').textContent = meanTimes[2].toFixed(2);
+
+        document.getElementById('theory-mean1').textContent = 
+            isFinite(theoryMeanTimes[0]) ? theoryMeanTimes[0].toFixed(2) : '∞';
+        document.getElementById('theory-mean2').textContent = 
+            isFinite(theoryMeanTimes[1]) ? theoryMeanTimes[1].toFixed(2) : '∞';
+        document.getElementById('theory-mean3').textContent = 
+            isFinite(theoryMeanTimes[2]) ? theoryMeanTimes[2].toFixed(2) : '∞';
+
+        // Гистограмма
+        if (distChart) distChart.destroy();   // Удаляем старую, если была
+        const ctx = document.getElementById('distChart').getContext('2d');
+        distChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Ясно', 'Облачно', 'Пасмурно'],
+                datasets: [
+                    {
+                        label: 'Эмпирическая вероятность',
+                        data: summary.empirical,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)'
+                    },
+                    {
+                        label: 'Теоретическая вероятность',
+                        data: summary.theoretical,
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        title: { display: true, text: 'Вероятность' }
+                    }
+                }
+            }
+        });
+        // document.getElementById('downloadLink').href = '/download/' + summary.file;
+      });
+      socket.on('error', (err) => {
+        document.getElementById('error').textContent = err.message;
+        simulationActive = false;
+        document.getElementById('stopBtn').disabled = true;
+      });
+    }
+
+    function startSim() {
+      if (!sessionId) {
+        alert('Соединение с сервером ещё не установлено, попробуйте через секунду.');
+        return;
+      }
+      // Собрать матрицу
+      const Q = [
+        [
+          parseFloat(document.getElementById('q11').value),
+          parseFloat(document.getElementById('q12').value),
+          parseFloat(document.getElementById('q13').value)
+        ],
+        [
+          parseFloat(document.getElementById('q21').value),
+          parseFloat(document.getElementById('q22').value),
+          parseFloat(document.getElementById('q23').value)
+        ],
+        [
+          parseFloat(document.getElementById('q31').value),
+          parseFloat(document.getElementById('q32').value),
+          parseFloat(document.getElementById('q33').value)
+        ]
+      ];
+      const n_days = parseInt(document.getElementById('days').value);
+      const speed = parseFloat(document.getElementById('speed').value);
+      socket.emit('start_simulation', {
+        session_id: sessionId,
+        Q: Q,
+        n_days: n_days,
+        speed: speed
+      });
+    }
+
+    function stopSim() {
+      // Простейшая реализация: отключить сокет и переподключить
+      socket.disconnect();
+      simulationActive = false;
+      document.getElementById('stopBtn').disabled = true;
+      document.getElementById('status').textContent = 'Моделирование прервано';
+      connect(); // переподключение для нового запуска
+    }
+
+    function initChart() {
+      const ctx = document.getElementById('chart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Состояние погоды',
+            data: [],
+            borderColor: 'blue',
+            stepped: true,
+            fill: false,
+            yAxisID: 'y',
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { title: { display: true, text: 'День' } },
+            y: {
+              title: { display: true, text: 'Состояние' },
+              min: 0.5, max: 3.5,
+              ticks: {
+                stepSize: 0.1,
+                callback: (value) => {
+                  const labels = {1:'Ясно', 2:'Облачно', 3:'Пасмурно'};
+                  return labels[value] || value;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function updateChart() {
+      if (!chart) return;
+      chart.data.labels = chartData.days;
+      chart.data.datasets[0].data = chartData.states;
+      chart.update();
+    }
+
+    window.onload = function() {
+      initChart();
+      connect();
+    };
+  </script>
+</body>
+</html>
