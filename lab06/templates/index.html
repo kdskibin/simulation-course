@@ -4,12 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Лаборатория моделирования</title>
+    <title>Моделирование</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Лаборатория моделирования: дискретные и нормальные распределения</h1>
+        <h1>Имитационное моделирование случайных величин</h1>
 
         {% with messages = get_flashed_messages() %}
             {% if messages %}
@@ -26,12 +26,12 @@
             <h2>Дискретная случайная величина</h2>
             <form method="post">
                 <div class="form-group">
-                    <label for="dist_text">Распределение (формат: x1,p1;x2,p2;...)</label>
-                    <textarea name="dist_text" id="dist_text" rows="3">{{ session.get('dist_text', '1,0.2;2,0.2;3,0.2;4,0.2;5,0.2') }}</textarea>
+                    <label for="dist_text">Распределение (формат: x1,p1;x2,p2;...\n N)</label>
+                    <textarea name="dist_text" id="dist_text" rows="3">{{ session.get('dist_text', '1,0.2;2,0.2;3,0.2;4,0.2;5,0.2\n200') }}</textarea>
                 </div>
 
                 <div class="form-group">
-                    <label>Предустановки:</label>
+                    <label>Распределение: </label>
                     <div class="preset-group">
                         <select name="preset">
                             <option value="uniform" {% if session.get('last_preset') == 'uniform' %}selected{% endif %}>Равномерное 1-5</option>
@@ -84,23 +84,24 @@
 
         <!-- Блок нормального распределения -->
         <div class="panel">
-            <h2>Нормальная случайная величина (Бокс-Мюллер)</h2>
+            <h2>Нормальная случайная величина</h2>
             <form method="post">
                 <div class="form-group">
-                    <label for="sample_sizes">Размеры выборок (Ctrl+Выбор для нескольких):</label>
+                    <label for="sample_sizes">Размеры выборок:</label>
                     <select name="sample_sizes" id="sample_sizes" multiple size="4">
                         <option value="10" {% if '10' in selected_normal_n %}selected{% endif %}>10</option>
                         <option value="100" {% if '100' in selected_normal_n %}selected{% endif %}>100</option>
                         <option value="1000" {% if '1000' in selected_normal_n %}selected{% endif %}>1000</option>
                         <option value="10000" {% if '10000' in selected_normal_n %}selected{% endif %}>10000</option>
+                        <option value="100000" {% if '100000' in selected_normal_n %}selected{% endif %}>100000</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="mu">Математическое ожидание (μ):</label>
+                    <label for="mu">Математическое ожидание:</label>
                     <input type="number" id="mu" name="mu" value="{{ mu|default(0) }}" step="any">
                 </div>
                 <div class="form-group">
-                    <label for="sigma">Стандартное отклонение (σ):</label>
+                    <label for="sigma">Стандартное отклонение:</label>
                     <input type="number" id="sigma" name="sigma" value="{{ sigma|default(1) }}" step="any" min="0.001">
                 </div>
                 <div class="form-group">

@@ -11,11 +11,13 @@ from scipy.stats import chi2, norm
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 
 app = Flask(__name__)
-app.secret_key = 'some_qunique_secret_key'
+app.secret_key = 'qwerty123456'
+
 
 # Парсер распределения из строки формата "x1,p1;x2,p2;..."
 def parse_distribution(text):
-    pairs = text.strip().split(';')
+    pairs_text, N = text.strip().split('\n')
+    pairs = pairs_text.strip().split(';')
     x_th = []
     p_th = []
     for pair in pairs:
@@ -27,11 +29,13 @@ def parse_distribution(text):
             p_th.append(float(parts[1].strip()))
     if not x_th:
         raise ValueError("Empty distribution")
-    total = sum(p_th)
-    if total == 0:
-        raise ValueError("Sum of probabilities is zero")
-    p_th = [p / total for p in p_th]
-    return x_th, p_th
+    try:
+        N = int(N)
+    except Exception as ex:
+        logging.error(f"Переданное значение N не может быть преобразовано в int")
+        N = 100
+    return {"x_th": x_th, "p_th": p_th, "N": N}
+
 
 def simulate_discrete(x_th, p_th, N):
     cdf = np.cumsum(p_th)
@@ -73,16 +77,15 @@ def simulate_discrete(x_th, p_th, N):
             'passed': passed,
             'samples': samples}
 
-def run_all_discrete(x_th, p_th):
-    sizes = [10, 100, 1000, 10000]
-    results = []
-    for N in sizes:
-        res = simulate_discrete(x_th, p_th, N)
-        results.append(res)
+
+def run_all_discrete(x_th, p_th, N):
+    sizes = set((10, 100, 1000, 10000, 100000, N))
+    results = {n: simulate_discrete(x_th, p_th, n) for n in sizes}
     return results
 
+
 def simulate_normal(N, bins, mu=0.0, sigma=1.0):
-    # генерация стандартных нормальных чисел (Бокс-Мюллер)
+    # Бокс-Мюллер
     samples = []
     for _ in range(N // 2):
         u1, u2 = random.random(), random.random()
@@ -93,7 +96,7 @@ def simulate_normal(N, bins, mu=0.0, sigma=1.0):
         u1, u2 = random.random(), random.random()
         samples.append(np.sqrt(-2 * np.log(u1)) * np.cos(2 * np.pi * u2))
     samples = np.array(samples)
-    # преобразование к заданным mu, sigma
+
     samples = mu + sigma * samples
 
     m_emp = np.mean(samples)
@@ -128,6 +131,7 @@ def simulate_normal(N, bins, mu=0.0, sigma=1.0):
         'sigma': sigma
     }
 
+
 def fig_to_base64(fig):
     buf = io.BytesIO()
     fig.savefig(buf, format='png', bbox_inches='tight', facecolor=fig.get_facecolor())
@@ -136,19 +140,21 @@ def fig_to_base64(fig):
     plt.close(fig)
     return img_base64
 
-def generate_discrete_plot(x_th, p_th, sample_10000):
+
+def generate_discrete_plot(x_th, p_th, samples):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     fig.patch.set_facecolor('#0b0e14')
     ax1.bar(x_th, p_th, color='#3498db', alpha=0.7)
     ax1.set_title('Теоретическое', color='#3498db')
     ax1.set_facecolor('#151921')
     ax1.tick_params(colors='#7f8c8d')
-    ax2.hist(sample_10000, bins=np.arange(min(x_th)-0.5, max(x_th)+1.5, 1),
+    ax2.hist(samples, bins=np.arange(min(x_th)-0.5, max(x_th)+1.5, 1),
              density=True, color='#3498db', alpha=0.7, rwidth=0.8)
-    ax2.set_title('Эмпирическое (N=10000)', color='#3498db')
+    ax2.set_title(f'Эмпирическое N={len(samples)}', color='#3498db')
     ax2.set_facecolor('#151921')
     ax2.tick_params(colors='#7f8c8d')
     return fig_to_base64(fig)
+
 
 def generate_normal_plot(normal_results, bins):
     n = len(normal_results)
@@ -167,16 +173,18 @@ def generate_normal_plot(normal_results, bins):
         ax.tick_params(colors='#7f8c8d')
     return fig_to_base64(fig)
 
+
 def normalize(x_th, p_th):
     if (p_sum := np.sum(p_th)) > 1:
-        logging.info(f"Сумма вероятностей больше единицы, нормализация")
+        logging.warning(f"Сумма вероятностей больше единицы, нормализация")
         new_p_th = [el/p_sum for el in p_th]
         return (x_th, new_p_th)
     return (x_th, p_th)
 
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    default_normal_n = ['10', '100', '1000', '10000']
+    default_normal_n = ['10', '100', '1000', '10000', '100000']
     default_bins = 20
     default_mu = 0.0
     default_sigma = 1.0
@@ -197,22 +205,24 @@ def index():
             dist_text = request.form.get('dist_text', '')
             session['dist_text'] = dist_text
             try:
-                x_th, p_th = parse_distribution(dist_text)
+                parse_result = parse_distribution(dist_text)
+                x_th = parse_result.get("x_th")
+                p_th = parse_result.get("p_th")
+                N = parse_result.get("N")
                 x_th, p_th = normalize(x_th, p_th)
             except Exception as e:
                 flash(f'Error parsing distribution: {e}')
                 return redirect(url_for('index'))
-            results = run_all_discrete(x_th, p_th)
-            plot = generate_discrete_plot(x_th, p_th, results[-1]['samples'])
+            results = run_all_discrete(x_th, p_th, N)
+            plot = generate_discrete_plot(x_th, p_th, results[N]['samples'])
             return render_template('index.html',
-                                   discrete_results=results,
+                                   discrete_results=[results[key] for key in sorted(results.keys(), key=lambda x: int(x))],
                                    discrete_plot=plot,
                                    selected_normal_n=default_normal_n,
                                    bins=default_bins,
                                    mu=default_mu,
                                    sigma=default_sigma)
 
-        # Запуск нормальной симуляции
         if 'run_normal' in request.form:
             raw_sizes = request.form.getlist('sample_sizes')
             try:
@@ -261,6 +271,7 @@ def index():
                            bins=default_bins,
                            mu=default_mu,
                            sigma=default_sigma)
+
 
 if __name__ == '__main__':
     app.run(debug=True)
