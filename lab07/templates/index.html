@@ -91,8 +91,10 @@
     let sessionId = null;
     let chart = null;
     let distChart = null;
-    let chartData = { days: [], states: [] };
+    // let chartData = { days: [], states: [] };
+    let chartData = { points: [] };
     let simulationActive = false;
+
 
     function connect() {
       socket = io();
@@ -110,23 +112,34 @@
         document.getElementById('results').classList.add('hidden');
         // Сброс графика
         chartData = { days: [], states: [] };
+        // if (chart) {
+        //   chart.data.labels = [];
+        //   chart.data.datasets[0].data = [];
+        //   chart.update();
+        // }
+        chartData = { points: [] };
         if (chart) {
-          chart.data.labels = [];
-          chart.data.datasets[0].data = [];
-          chart.update();
+            chart.data.datasets[0].data = [];
+            chart.update();
         }
         simulationActive = true;
         if (distChart) {
           distChart.destroy();
           distChart = null;}
       });
-      socket.on('new_day', (data) => {
-        chartData.days.push(data.day);
-        chartData.states.push(data.state);
-        updateChart();
-        document.getElementById('status').textContent =
-          `День ${data.day}: ${data.label}`;
-      });
+      // socket.on('new_day', (data) => {
+      //   chartData.days.push(data.day);
+      //   chartData.states.push(data.state);
+      //   updateChart();
+      //   document.getElementById('status').textContent =
+      //     `День ${data.day}: ${data.label}`;
+      // });
+      socket.on('state_change', (data) => {
+      chartData.points.push({x: data.time, y: data.state});
+      updateChart();
+      document.getElementById('status').textContent =
+      `Время ${data.time.toFixed(2)} дн: ${data.label}`;});
+
       socket.on('simulation_done', (summary) => {
         simulationActive = false;
         document.getElementById('stopBtn').disabled = true;
@@ -242,44 +255,84 @@
 
     function initChart() {
       const ctx = document.getElementById('chart').getContext('2d');
+      // chart = new Chart(ctx, {
+      //   type: 'line',
+      //   data: {
+      //     labels: [],
+      //     datasets: [{
+      //       label: 'Состояние погоды',
+      //       data: [],
+      //       borderColor: 'blue',
+      //       stepped: true,
+      //       fill: false,
+      //       yAxisID: 'y',
+      //     }]
+      //   },
+      //   options: {
+      //     responsive: true,
+      //     scales: {
+      //       x: { title: { display: true, text: 'День' } },
+      //       y: {
+      //         title: { display: true, text: 'Состояние' },
+      //         min: 0.5, max: 3.5,
+      //         ticks: {
+      //           stepSize: 0.1,
+      //           callback: (value) => {
+      //             const labels = {1:'Ясно', 2:'Облачно', 3:'Пасмурно'};
+      //             return labels[value] || value;
+      //           }
+      //         }
+      //       }
+      //     }
+      //   }
+      // });
       chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [{
-            label: 'Состояние погоды',
-            data: [],
-            borderColor: 'blue',
-            stepped: true,
-            fill: false,
-            yAxisID: 'y',
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: {
-            x: { title: { display: true, text: 'День' } },
-            y: {
-              title: { display: true, text: 'Состояние' },
-              min: 0.5, max: 3.5,
-              ticks: {
-                stepSize: 0.1,
-                callback: (value) => {
-                  const labels = {1:'Ясно', 2:'Облачно', 3:'Пасмурно'};
-                  return labels[value] || value;
-                }
+          type: 'line',
+          data: {
+              datasets: [{
+                  label: 'Состояние погоды',
+                  data: chartData.points,   // массив {x, y}
+                  borderColor: 'blue',
+                  stepped: true,
+                  fill: false,
+                  yAxisID: 'y',
+              }]
+          },
+          options: {
+              responsive: true,
+              scales: {
+                  x: {
+                      type: 'linear',        // обязательно для нецелых дней
+                      title: { display: true, text: 'День' },
+                      min: 0,
+                      ticks: { stepSize: 1 }  // основные деления по целым дням
+                  },
+                  y: {
+                      title: { display: true, text: 'Состояние' },
+                      min: 0.5, max: 3.5,
+                      ticks: {
+                          stepSize: 1,
+                          callback: (value) => {
+                              const labels = {1:'Ясно', 2:'Облачно', 3:'Пасмурно'};
+                              return labels[value] || value;
+                          }
+                      }
+                  }
               }
-            }
           }
-        }
       });
     }
 
+    // function updateChart() {
+    //   if (!chart) return;
+    //   chart.data.labels = chartData.days;
+    //   chart.data.datasets[0].data = chartData.states;
+    //   chart.update();
+    // }
     function updateChart() {
-      if (!chart) return;
-      chart.data.labels = chartData.days;
-      chart.data.datasets[0].data = chartData.states;
-      chart.update();
+        if (!chart) return;
+        chart.data.datasets[0].data = chartData.points;
+        chart.update();
     }
 
     window.onload = function() {

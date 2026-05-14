@@ -29,6 +29,9 @@ def parse_distribution(text):
             p_th.append(float(parts[1].strip()))
     if not x_th:
         raise ValueError("Empty distribution")
+    for el in p_th:
+        if el < 0:
+            raise ValueError("Отрицательная вероятность!")
     try:
         N = int(N)
     except Exception as ex:
@@ -177,7 +180,11 @@ def generate_normal_plot(normal_results, bins):
 def normalize(x_th, p_th):
     if (p_sum := np.sum(p_th)) > 1:
         logging.warning(f"Сумма вероятностей больше единицы, нормализация")
-        new_p_th = [el/p_sum for el in p_th]
+        new_p_th = []
+        for el in p_th:
+            if el < 0:
+                raise ValueError("Вероятность не может быть меньше единицы!")
+            new_p_th.append(el/p_sum)
         return (x_th, new_p_th)
     return (x_th, p_th)
 

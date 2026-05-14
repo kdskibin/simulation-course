@@ -42,10 +42,16 @@ def run_simulation(session_id, Q, n_days, speed, initial_state):
     next_time = t + np.random.exponential(scale=1.0/diag[current_state-1]) if diag[current_state-1] > 0 else np.inf
 
     state_history = []
+    times_history = []
     day = 0
     total_time_in_state = np.zeros(n_states)
 
     day_step = 1
+
+    socketio.emit('state_change', {
+    'time': 0.0,
+    'state': int(current_state),
+    'label': STATE_LABELS[int(current_state)]}, room=session_id)
 
     while day < n_days:
         while t < day + day_step:
@@ -66,15 +72,20 @@ def run_simulation(session_id, Q, n_days, speed, initial_state):
                 probs[current_state-1] = 0
                 probs /= probs.sum()
                 current_state = int(np.random.choice(range(1, n_states+1), p=probs))
+                socketio.emit('state_change', {
+                'time': float(t),
+                'state': int(current_state),
+                'label': STATE_LABELS[int(current_state)]}, room=session_id)
                 visit_counts[current_state - 1] += 1
                 # Генерация времени до следующего перехода
                 next_time = t + np.random.exponential(scale=1.0/diag[current_state-1]) if diag[current_state-1] > 0 else np.inf
 
-        state_history.append(current_state)
+                state_history.append(current_state)
+                times_history.append(next_time)
         # Отправка на клиент для визуализации
-        socketio.emit('new_day', {'day': float(day + day_step),
-                                  'state': int(current_state),
-                                  'label': STATE_LABELS[int(current_state)]}, room=session_id)
+        # socketio.emit('new_day', {'day': float(day + day_step),
+        #                           'state': int(current_state),
+        #                           'label': STATE_LABELS[int(current_state)]}, room=session_id)
 
         day += day_step
         socketio.sleep(speed)
@@ -86,13 +97,19 @@ def run_simulation(session_id, Q, n_days, speed, initial_state):
     theoretical_pi = compute_stationary(Q)
 
     # Формирование DataFrame для сохранения
-    df_log = pd.DataFrame({'День': range(1, len(state_history)+1),
+    df_log = pd.DataFrame({'День': times_history,
                            'Состояние': state_history})
     df_log['Погода'] = df_log['Состояние'].map(STATE_LABELS)
     filename = f'weather_simulation.csv'
     filepath = os.path.join('downloads', filename)
     os.makedirs('downloads', exist_ok=True)
     df_log.to_csv(filepath, index=False)
+
+    socketio.emit('state_change', {
+        'time': float(n_days),
+        'state': int(current_state),
+        'label': STATE_LABELS[int(current_state)]
+    }, room=session_id)
 
     # Отправка итогов
     socketio.emit('simulation_done', {'empirical': empirical_pi.tolist(),
