@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Пуассоновский поток событий</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 20px; }
+        .form-group { margin-bottom: 10px; }
+        label { display: inline-block; width: 80px; }
+        input { width: 150px; padding: 4px; }
+        button { padding: 8px 20px; margin-right: 10px; }
+        .results { margin-top: 20px; }
+        .stats { display: flex; justify-content: space-around; margin: 15px 0; }
+        .card { border: 1px solid #ccc; padding: 10px; flex: 1; margin: 0 10px; border-radius: 5px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .demo-result { margin-left: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Моделирование потока запросов на сервер</h1>
+    <div>
+        <div class="form-group">
+            <label>λ (интенс.):</label>
+            <input type="number" id="lambda" value="2" step="0.1" min="0.1">
+        </div>
+        <div class="form-group">
+            <label>T (интервал):</label>
+            <input type="number" id="T" value="10" step="0.1" min="0.1">
+        </div>
+        <div class="form-group">
+            <label>N (экспер.):</label>
+            <input type="number" id="N" value="1000" step="1" min="1">
+        </div>
+        <button id="runBtn">Запустить симуляцию</button>
+        <button id="demoBtn">Один запуск</button>
+        <span id="demoResult" class="demo-result"></span>
+    </div>
+
+    <div id="results" style="display:none;">
+        <div class="stats">
+            <div class="card">
+                <h3>Эмпирические</h3>
+                <p>Среднее: <span id="empMean"></span></p>
+                <p>Дисперсия: <span id="empVar"></span></p>
+            </div>
+            <div class="card">
+                <h3>Теоретические</h3>
+                <p>Среднее: <span id="theoMean"></span></p>
+                <p>Дисперсия: <span id="theoVar"></span></p>
+            </div>
+        </div>
+        <p id="conclusion" style="white-space: pre-line; background: #f9f9f9; padding: 10px; border-radius: 5px;"></p>
+        <canvas id="distChart" width="800" height="400"></canvas>
+        <table id="freqTable">
+            <thead><tr><th>k</th><th>Эмпирическая P</th><th>Теоретическая P</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const runBtn = document.getElementById('runBtn');
+        const demoBtn = document.getElementById('demoBtn');
+        let chart;
+
+        runBtn.addEventListener('click', async () => {
+            const lambda = document.getElementById('lambda').value;
+            const T = document.getElementById('T').value;
+            const N = document.getElementById('N').value;
+
+            const formData = new FormData();
+            formData.append('lambda', lambda);
+            formData.append('T', T);
+            formData.append('N', N);
+
+            try {
+                const resp = await fetch('/simulate', { method: 'POST', body: formData });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    alert(err.error);
+                    return;
+                }
+                const data = await resp.json();
+                showResults(data);
+            } catch (e) {
+                alert('Ошибка соединения');
+            }
+        });
+
+        demoBtn.addEventListener('click', () => {
+            const lambda = parseFloat(document.getElementById('lambda').value) || 2;
+            const T = parseFloat(document.getElementById('T').value) || 10;
+            let count = 0, time = 0;
+            while (time < T) {
+                const u = Math.max(Math.random(), 1e-10);
+                time += -Math.log(u) / lambda;
+                if (time <= T) count++;
+            }
+            document.getElementById('demoResult').textContent = `${count} запросов`;
+        });
+
+        function showResults(data) {
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('empMean').textContent = data.emp_mean;
+            document.getElementById('empVar').textContent = data.emp_var;
+            document.getElementById('theoMean').textContent = data.theo_mean;
+            document.getElementById('theoVar').textContent = data.theo_var;
+            document.getElementById('conclusion').textContent = data.conclusion;
+
+            // Таблица
+            const tbody = document.querySelector('#freqTable tbody');
+            tbody.innerHTML = '';
+            data.freq_table.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${row.k}</td><td>${row.empirical}</td><td>${row.theoretical}</td>`;
+                tbody.appendChild(tr);
+            });
+
+            // График
+            const ctx = document.getElementById('distChart').getContext('2d');
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.chart_labels,
+                    datasets: [
+                        { label: 'Эмпирическое', data: data.empirical_series, backgroundColor: 'rgba(70,130,180,0.7)' },
+                        { label: 'Теоретическое', data: data.theoretical_series, backgroundColor: 'rgba(200,70,70,0.7)' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { title: { display: true, text: 'Вероятность' }, beginAtZero: true },
+                        x: { ticks: { maxRotation: 45 } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
