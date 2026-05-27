@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Лабораторная работа: СМО M/M/1/0</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <h1 class="mb-4">СМО M/M/1/0</h1>
+        <p>Один обработчик, без очереди. Если обработчик занят, то заявка получает отказ в обслуживании</p>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Параметры моделирования</h5>
+                <form id="simForm" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="lambda" class="form-label">Интенсивность lambda</label>
+                        <input type="number" step="any" class="form-control" id="lambda" name="lambda" value="0.8" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="mu" class="form-label">Интенсивность mu (обработка заявок)</label>
+                        <input type="number" step="any" class="form-control" id="mu" name="mu" value="1.0" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="N" class="form-label">Число заявок N</label>
+                        <input type="number" class="form-control" id="N" name="N" value="10000" required>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">Запустить моделирование</button>
+                    </div>
+                </form>
+                <div class="mt-2">
+                    <span id="rhoDisplay" class="fw-bold"></span>
+                </div>
+            </div>
+        </div>
+
+        <div id="statusMessage" class="alert alert-info" style="display: none;"></div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Распределение состояний</h5>
+                        <canvas id="distChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Результаты</h5>
+                        <div id="resultsBlock">
+                            <p class="text-muted">Пока результатов нет.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Элементы DOM
+        const form = document.getElementById('simForm');
+        const lambdaInput = document.getElementById('lambda');
+        const muInput = document.getElementById('mu');
+        const rhoDisplay = document.getElementById('rhoDisplay');
+        const statusMessage = document.getElementById('statusMessage');
+        const resultsBlock = document.getElementById('resultsBlock');
+
+        // График Chart.js
+        const ctx = document.getElementById('distChart').getContext('2d');
+        let chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Свободен (P0)', 'Занят (P1)'],
+                datasets: [
+                    {
+                        label: 'Эмпирическое',
+                        data: [0, 0],
+                        backgroundColor: 'rgba(70, 130, 180, 0.7)',
+                        borderColor: 'rgba(70, 130, 180, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Теоретическое',
+                        data: [0, 0],
+                        backgroundColor: 'rgba(200, 70, 70, 0.7)',
+                        borderColor: 'rgba(200, 70, 70, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        title: {
+                            display: true,
+                            text: 'Вероятность'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value.toFixed(4);
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.raw.toFixed(4);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        function updateRho() {
+            const lam = parseFloat(lambdaInput.value);
+            const mu = parseFloat(muInput.value);
+            if (lam > 0 && mu > 0) {
+                const rho = lam / mu;
+                rhoDisplay.textContent = `ρ = ${rho.toFixed(3)}`;
+            } else {
+                rhoDisplay.textContent = '';
+            }
+        }
+        lambdaInput.addEventListener('input', updateRho);
+        muInput.addEventListener('input', updateRho);
+        updateRho();
+
+        // Обработка отправки формы
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            statusMessage.style.display = 'block';
+            statusMessage.textContent = 'Выполняется...';
+            statusMessage.className = 'alert alert-info';
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/simulate', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Ошибка сервера');
+                }
+
+                const data = await response.json();
+                if (data.status !== 'ok') {
+                    throw new Error('Неверный ответ сервера');
+                }
+
+                const res = data.results;
+
+                // Обновление графика
+                chart.data.datasets[0].data = [res.empirical.p0, res.empirical.p1];
+                chart.data.datasets[1].data = [res.theoretical.p0, res.theoretical.p1];
+                chart.update();
+
+                // Обновление текстового блока с результатами
+                resultsBlock.innerHTML = `
+                    <table class="table table-sm table-bordered">
+                        <tr><th>Параметр</th><th>Теоретическое</th><th>Эмпирическое</th></tr>
+                        <tr><td>P0 (свободен)</td><td>${res.theoretical.p0}</td><td>${res.empirical.p0}</td></tr>
+                        <tr><td>P1 (занят) / P<sub>отк</sub></td><td>${res.theoretical.refusal}</td><td>${res.empirical.refusal}</td></tr>
+                        <tr><td>Пропускная способность</td><td>${res.theoretical.throughput}</td><td>${res.empirical.throughput}</td></tr>
+                    </table>
+                    <p><strong>Отказов:</strong> ${res.counts.refused} из ${res.N} заявок</p>
+                    <p class="text-muted">lambda = ${res.lambda}, mu = ${res.mu}, rho = ${res.rho}</p>
+                `;
+
+                statusMessage.textContent = `Готово. lambda=${res.lambda}, mu=${res.mu}, N=${res.N}`;
+                statusMessage.className = 'alert alert-success';
+            } catch (error) {
+                statusMessage.textContent = 'Ошибка: ' + error.message;
+                statusMessage.className = 'alert alert-danger';
+            }
+        });
+    </script>
+</body>
+</html>
