@@ -2,6 +2,7 @@ import math
 import random
 import collections
 import numpy as np
+from server import Server
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
@@ -35,7 +36,8 @@ def simulate():
         next_arrival_time = -math.log(max(random.random(), 1e-10)) / lambda_val
 
         # Список каналов: время освобождения, изначально все свободны (0.0)
-        servers = [0.0] * c
+        servers = [Server(0.0, mu_val) for _ in range(c)]
+        # servers = [0.0] * c
         queue = collections.deque() # хранит времена прибытия ожидающих заявок
 
         accepted = 0
@@ -49,7 +51,7 @@ def simulate():
 
         def get_busy_count(t):
             """Возвращает число занятых каналов на момент времени t"""
-            return sum(1 for s in servers if s > t)
+            return sum(1 for s in servers if s.free_at > t)
 
         # Основной цикл
         while (arrivals_generated < N) or queue or any(s > current_time for s in servers):
@@ -60,7 +62,7 @@ def simulate():
                 next_arr = float('inf')
 
             # Ближайшее освобождение
-            min_dep = min((s for s in servers if s > current_time), default=float('inf'))
+            min_dep = min((s.free_at for s in servers if s.free_at > current_time), default=float('inf'))
 
             next_event_time = min(next_arr, min_dep)
             if next_event_time == float('inf'):
