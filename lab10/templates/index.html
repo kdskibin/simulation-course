@@ -2,243 +2,216 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>СМОшка</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>СМО</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { padding: 20px; background-color: #f4f6f9; }
+        .chart-container { position: relative; height: 350px; width: 100%; margin-bottom: 20px; }
+        #log { height: 300px; overflow-y: scroll; background: #212529; color: #f8f9fa; padding: 15px; font-family: monospace; font-size: 0.85rem; border-radius: 5px; }
+        .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="container py-4">
-        <h1 class="mb-4">Система Массового Обслуживания M/M/С/∞</h1>
-        <p>Многоканальная система с очередью. Если все каналы заняты, заявка с вероятностью <em>p</em> покидает систему, иначе встаёт в очередь.</p>
-
-        <div class="card mb-4">
-            <div class="card-body">
-                <h5 class="card-title">Параметры моделирования</h5>
-                <form id="simForm" class="row g-3">
-                    <div class="col-md-2">
-                        <label for="lambda" class="form-label">λ - интенсивность поступления</label>
-                        <input type="number" step="any" class="form-control" id="lambda" name="lambda" value="2.0" required>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="mu" class="form-label">μ - интенсивность обслуживания</label>
-                        <input type="number" step="any" class="form-control" id="mu" name="mu" value="1.0" required>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="N" class="form-label">Число заявок - N</label>
-                        <input type="number" class="form-control" id="N" name="N" value="10000" required>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="c" class="form-label">Число обработчиков - C</label>
-                        <input type="number" class="form-control" id="c" name="c" value="2" min="1" required>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="p_impatient" class="form-label">Вероятность нетерпеливости - p</label>
-                        <input type="number" step="any" class="form-control" id="p_impatient" name="p_impatient" value="0.3" min="0" max="1" required>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">Запустить</button>
-                    </div>
-                </form>
-                <div class="mt-2">
-                    <span id="rhoDisplay" class="fw-bold"></span>
-                </div>
-            </div>
-        </div>
-
-        <div id="statusMessage" class="alert alert-info" style="display: none;"></div>
-
+<body>
+    <div class="container-fluid">
+        <h1 class="mb-4 text-primary">Моделирование СМО M/M/n/*</h1>
+        
         <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="card">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header bg-white fw-bold">Параметры системы</div>
                     <div class="card-body">
-                        <h5 class="card-title">Число занятых операторов</h5>
-                        <canvas id="busyChart" height="250"></canvas>
+                        <form id="simForm" class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">λ (Поступление заявок)</label>
+                                <input type="number" step="0.1" class="form-control" id="lambda" value="5.0" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">μ (Обработка заявок)</label>
+                                <input type="number" step="0.1" class="form-control" id="mu" value="2.0" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">n (Количество обработчиков)</label>
+                                <input type="number" step="1" class="form-control" id="n" value="3" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Макс. размер очереди</label>
+                                <input type="number" step="1" class="form-control" id="queue_size" value="15" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Макс. терпение (время)</label>
+                                <input type="number" step="0.1" class="form-control" id="patience" value="5.0" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Длительность T</label>
+                                <input type="number" step="1" class="form-control" id="t" value="100" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Вероятность VIP</label>
+                                <input type="number" step="0.05" min="0" max="1" class="form-control" id="vip_prob" value="0" required>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary" id="btnRun">Запустить симуляцию</button>
+                                <button type="button" class="btn btn-success" id="btnExport" disabled>Экспорт отчета (.txt)</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header bg-white fw-bold">Динамика системы</div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chartQueue"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card">
+            
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header bg-white fw-bold">Итоговые доли заявок</div>
                     <div class="card-body">
-                        <h5 class="card-title">Длина очереди</h5>
-                        <canvas id="queueChart" height="250"></canvas>
+                        <div style="height: 250px;">
+                            <canvas id="chartResults"></canvas>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-4">
+                
                 <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Время ожидания</h5>
-                        <canvas id="waitChart" height="250"></canvas>
+                    <div class="card-header bg-white fw-bold">Лог событий</div>
+                    <div class="card-body p-0">
+                        <div id="log"></div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Результаты</h5>
-                <div id="resultsBlock">
-                    <p class="text-muted">Пока результатов нет.</p>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // DOM элементы
-        const form = document.getElementById('simForm');
-        const lambdaInput = document.getElementById('lambda');
-        const muInput = document.getElementById('mu');
-        const cInput = document.getElementById('c');
-        const rhoDisplay = document.getElementById('rhoDisplay');
-        const statusMessage = document.getElementById('statusMessage');
-        const resultsBlock = document.getElementById('resultsBlock');
+        let chartQueue = null;
+        let chartResults = null;
+        let lastResults = null;
+        let lastParams = null;
 
-        // Графики
-        const ctxBusy = document.getElementById('busyChart').getContext('2d');
-        const ctxQueue = document.getElementById('queueChart').getContext('2d');
-        const ctxWait = document.getElementById('waitChart').getContext('2d');
-
-        let busyChart = new Chart(ctxBusy, {
-            type: 'bar',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Вероятность',
-                    data: [],
-                    backgroundColor: 'rgba(70, 130, 180, 0.7)',
-                    borderColor: 'rgba(70, 130, 180, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: { y: { beginAtZero: true, max: 1 } },
-                plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(6)}` } } }
-            }
-        });
-
-        let queueChart = new Chart(ctxQueue, {
-            type: 'bar',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Вероятность',
-                    data: [],
-                    backgroundColor: 'rgba(70, 130, 180, 0.7)',
-                    borderColor: 'rgba(70, 130, 180, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: { y: { beginAtZero: true, max: 1 } },
-                plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(6)}` } } }
-            }
-        });
-
-        let waitChart = new Chart(ctxWait, {
-            type: 'bar',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Частота',
-                    data: [],
-                    backgroundColor: 'rgba(70, 130, 180, 0.7)',
-                    borderColor: 'rgba(70, 130, 180, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: { y: { beginAtZero: true } },
-                plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}` } } }
-            }
-        });
-
-        function updateRho() {
-            const lam = parseFloat(lambdaInput.value);
-            const mu = parseFloat(muInput.value);
-            const cVal = parseInt(cInput.value);
-            if (lam > 0 && mu > 0 && cVal > 0) {
-                const rho = lam / (mu * cVal);
-                rhoDisplay.textContent = `ρ (на канал) = ${rho.toFixed(3)}`;
-            } else {
-                rhoDisplay.textContent = '';
-            }
-        }
-        lambdaInput.addEventListener('input', updateRho);
-        muInput.addEventListener('input', updateRho);
-        cInput.addEventListener('input', updateRho);
-        updateRho();
-
-        // Обработка отправки формы
-        form.addEventListener('submit', async function(e) {
+        document.getElementById('simForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            statusMessage.style.display = 'block';
-            statusMessage.textContent = 'Выполняется моделирование...';
-            statusMessage.className = 'alert alert-info';
+            const btnRun = document.getElementById('btnRun');
+            btnRun.disabled = true;
+            btnRun.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Выполняется...';
 
-            const formData = new FormData(form);
+            const params = {
+                lambda: parseFloat(document.getElementById('lambda').value),
+                mu: parseFloat(document.getElementById('mu').value),
+                n: parseInt(document.getElementById('n').value),
+                queue_size: parseInt(document.getElementById('queue_size').value),
+                patience: parseFloat(document.getElementById('patience').value),
+                t: parseFloat(document.getElementById('t').value),
+                vip_prob: parseFloat(document.getElementById('vip_prob').value)
+            };
+            lastParams = params;
 
             try {
                 const response = await fetch('/simulate', {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params)
                 });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Ошибка сервера');
-                }
-
                 const data = await response.json();
-                if (data.status !== 'ok') throw new Error('Неверный ответ сервера');
-
-                const res = data.results;
-                const emp = res.empirical;
-
-                // Обновление графика "Число занятых операторов"
-                busyChart.data.labels = Array.from({length: res.c + 1}, (_, i) => i);
-                busyChart.data.datasets[0].data = emp.busy_distribution;
-                busyChart.update();
-
-                // Обновление графика "Длина очереди"
-                queueChart.data.labels = Array.from({length: emp.queue_length_distribution.length}, (_, i) => i);
-                queueChart.data.datasets[0].data = emp.queue_length_distribution;
-                queueChart.update();
-
-                // Обновление гистограммы времени ожидания
-                waitChart.data.labels = emp.waiting_histogram.labels;
-                waitChart.data.datasets[0].data = emp.waiting_histogram.counts;
-                waitChart.update();
-
-                // Сводная таблица
-                resultsBlock.innerHTML = `
-                    <table class="table table-sm table-bordered">
-                        <tr><th>Параметр</th><th>Значение</th></tr>
-                        <tr><td>λ</td><td>${res.lambda}</td></tr>
-                        <tr><td>μ</td><td>${res.mu}</td></tr>
-                        <tr><td>C (обработчики)</td><td>${res.c}</td></tr>
-                        <tr><td>p нетерпеливости</td><td>${res.p_impatient}</td></tr>
-                        <tr><td>ρ на канал</td><td>${res.rho}</td></tr>
-                        <tr><td>Обслужено заявок</td><td>${res.counts.accepted}</td></tr>
-                        <tr><td>Отказов</td><td>${res.counts.refused}</td></tr>
-                        <tr><td>Пропускная способность</td><td>${res.throughput}</td></tr>
-                        <tr><td>Среднее количество заннятых обработчиков</td><td>${emp.mean_busy}</td></tr>
-                        <tr><td>Средняя длина очереди</td><td>${emp.mean_queue}</td></tr>
-                        <tr><td>Среднее время ожидания</td><td>${emp.mean_waits}</td></tr>
-                        <tr><td>Общее время моделирования</td><td>${res.total_time}</td></tr>
-                    </table>
-                `;
-
-                statusMessage.textContent = `Готово. λ=${res.lambda}, μ=${res.mu}, c=${res.c}, N=${res.N}`;
-                statusMessage.className = 'alert alert-success';
-            } catch (error) {
-                statusMessage.textContent = 'Ошибка: ' + error.message;
-                statusMessage.className = 'alert alert-danger';
+                if (data.status === 'ok') {
+                    lastResults = data.results;
+                    updateCharts(data.results);
+                    updateLog(data.results.log);
+                    document.getElementById('btnExport').disabled = false;
+                } else {
+                    alert('Ошибка: ' + data.error);
+                }
+            } catch (err) {
+                alert('Ошибка сети: ' + err);
+            } finally {
+                btnRun.disabled = false;
+                btnRun.innerHTML = 'Запустить симуляцию';
             }
         });
+
+        document.getElementById('btnExport').addEventListener('click', async function() {
+            if (!lastResults || !lastParams) return;
+            const payload = { ...lastParams, stats: lastResults.stats, log: lastResults.log };
+            
+            try {
+                const response = await fetch('/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `lab10_report_n${lastParams.n}_T${lastParams.t}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('Ошибка экспорта: ' + err);
+            }
+        });
+
+        function updateCharts(results) {
+            const ctxRes = document.getElementById('chartResults').getContext('2d');
+            if (chartResults) chartResults.destroy();
+            chartResults = new Chart(ctxRes, {
+                type: 'bar',
+                data: {
+                    labels: ['Обслужено', 'Отказы', 'Нетерпеливые'],
+                    datasets: [{
+                        label: 'Доля',
+                        data: [results.stats.prop_served, results.stats.prop_refused, results.stats.prop_impatient],
+                        backgroundColor: ['rgba(70, 130, 180, 0.8)', 'rgba(200, 70, 70, 0.8)', 'rgba(200, 160, 50, 0.8)']
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 1, ticks: { callback: (v) => (v*100).toFixed(0) + '%' } } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            const ctxQ = document.getElementById('chartQueue').getContext('2d');
+            if (chartQueue) chartQueue.destroy();
+            
+            chartQueue = new Chart(ctxQ, {
+                type: 'line',
+                data: {
+                    labels: results.time_points.map(t => t.toFixed(1)),
+                    datasets: [
+                        {
+                            label: 'Занятые серверы', data: results.busy_servers,
+                            borderColor: 'rgb(70, 130, 180)', backgroundColor: 'rgba(70, 130, 180, 0.1)', tension: 0, pointRadius: 0, borderWidth: 2
+                        },
+                        {
+                            label: 'Длина очереди', data: results.queue_length,
+                            borderColor: 'rgb(200, 70, 70)', backgroundColor: 'rgba(200, 70, 70, 0.1)', tension: 0, pointRadius: 0, borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Модельное время' }, ticks: { maxTicksLimit: 15 } },
+                        y: { title: { display: true, text: 'Количество' }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function updateLog(logEntries) {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML = logEntries.join('<br>');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
     </script>
 </body>
 </html>
